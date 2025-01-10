@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>경비게이션</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .top-bar {
+      background-color: #468dff;
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 18px;
+      font-weight: bold;
+      width: 100%;
+    }
+
+    .info-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      background-color: #f4f4f4;
+      padding: 10px 20px;
+      box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .language-buttons button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .visitor-count {
+      font-size: 14px;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 50%;
+    }
+
+    .floor-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      justify-content: center;
+      align-items: center;
+      margin: auto;
+    }
+
+    .floor-button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      width: 100px;
+      height: 100px;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .map-container, .start-selection, .video-container {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    video {
+      max-width: 80%;
+      max-height: 70%;
+      border-radius: 10px;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: rgba(255, 255, 255, 0.8);
+      color: #ff4d4d;
+      border: none;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar" data-translate="title">경비게이션</div>
+
+  <div class="info-bar">
+    <div class="language-buttons">
+      <button data-lang="ko">한국어</button>
+      <button data-lang="en">English</button>
+      <button data-lang="zh">中文</button>
+      <button data-lang="ja">日本語</button>
+    </div>
+    <div class="visitor-count" data-translate="visitor">일일 방문객: <span id="visitor-count">0</span>명</div>
+  </div>
+
+  <div class="floor-buttons">
+    <button class="floor-button" data-floor="1층">1층</button>
+    <button class="floor-button" data-floor="2층">2층</button>
+    <button class="floor-button" data-floor="3층">3층</button>
+    <button class="floor-button" data-floor="지하1층">지하 1층</button>
+  </div>
+
+  <div class="map-container" id="map-container">
+    <img id="map" src="" alt="도면" usemap="#map-areas" />
+    <map name="map-areas" id="map-areas"></map>
+    <button class="close-btn" onclick="closeMap()">X</button>
+  </div>
+
+  <div class="start-selection" id="start-selection">
+    <h2>시작점</h2>
+    <button class="start-point-btn" data-start="1F">1F</button>
+    <button class="start-point-btn" data-start="3F">3F</button>
+    <button class="close-btn" onclick="closeStartSelection()">X</button>
+  </div>
+
+  <div class="video-container" id="video-container">
+    <video id="video-player" controls>
+      <source id="video-source" src="" type="video/mp4">
+    </video>
+    <button class="close-btn" onclick="closeVideo()">X</button>
+  </div>
+
+  <script>
+    const translations = {
+      ko: { title: "경비게이션", visitor: "일일 방문객: ", floor1: "1층", floor2: "2층", floor3: "3층", floorB1: "지하 1층" },
+      en: { title: "Floor Navigation Kiosk", visitor: "Daily Visitors: ", floor1: "1F", floor2: "2F", floor3: "3F", floorB1: "B1" },
+      zh: { title: "楼层导航服务", visitor: "每日访客: ", floor1: "1层", floor2: "2层", floor3: "3层", floorB1: "地下1层" },
+      ja: { title: "階層ナビゲーションキオスク", visitor: "訪問者数: ", floor1: "1階", floor2: "2階", floor3: "3階", floorB1: "地下1階" },
+    };
+
+    const floorData = {
+      '1층': {
+        map: '1층.jpg',
+        areas: [
+          { coords: '257,90,277,114', area: '구역1' },
+          { coords: '327,69,344,87', area: '구역2' },
+          { coords: '408,77,427,97', area: '구역3' },
+          { coords: '388,177,409,200', area: '구역4' },
+        ],
+        videos: {
+          '구역1_1F': '1층_구역1_1F.mp4',
+          '구역1_3F': '1층_구역1_3F.mp4',
+          '구역2_1F': '1층_구역2_1F.mp4',
+          '구역2_3F': '1층_구역2_3F.mp4',
+          '구역3_1F': '1층_구역3_1F.mp4',
+          '구역3_3F': '1층_구역3_3F.mp4',
+          '구역4_1F': '1층_구역4_1F.mp4',
+          '구역4_3F': '1층_구역4_3F.mp4',
+        },
+      },
+      '2층': {
+        map: '2층.jpg',
+        areas: [
+          { coords: '376,144,390,165', area: '구역1' },
+          { coords: '277,175,292,202', area: '구역2' },
+          { coords: '414,193,434,212', area: '구역3' },
+        ],
+        videos: {
+          '구역1_1F': '2층_구역1_1F.mp4',
+          '구역1_3F': '2층_구역1_3F.mp4',
+          '구역2_1F': '2층_구역2_1F.mp4',
+          '구역2_3F': '2층_구역2_3F.mp4',
+          '구역3_1F': '2층_구역3_1F.mp4',
+          '구역3_3F': '2층_구역3_3F.mp4',
+        },
+      },
+      '3층': {
+        map: '3층.jpg',
+        areas: [
+          { coords: '409,77,431,95', area: '구역1' },
+          { coords: '503,139,521,155', area: '구역2' },
+          { coords: '445,153,474,171', area: '구역3' },
+        ],
+        videos: {
+          '구역1_1F': '3층_구역1_1F.mp4',
+          '구역1_3F': '3층_구역1_3F.mp4',
+          '구역2_1F': '3층_구역2_1F.mp4',
+          '구역2_3F': '3층_구역2_3F.mp4',
+          '구역3_1F': '3층_구역3_1F.mp4',
+          '구역3_3F': '3층_구역3_3F.mp4',
+        },
+      },
+      '지하1층': {
+        map: '지하1층.jpg',
+        areas: [
+          { coords: '272,226,295,250', area: '구역1' },
+          { coords: '415,234,436,253', area: '구역2' },
+        ],
+        videos: {
+          '구역1_1F': '지하1층_구역1_1F.mp4',
+          '구역1_3F': '지하1층_구역1_3F.mp4',
+          '구역2_1F': '지하1층_구역2_1F.mp4',
+          '구역2_3F': '지하1층_구역2_3F.mp4',
+        },
+      },
+    };
+
+    const state = {
+      currentFloor: null,
+      selectedArea: null,
+    };
+
+    document.addEventListener('click', (event) => {
+      if (event.target.matches('.floor-button')) {
+        const floor = event.target.dataset.floor;
+        showMap(floor);
+      } else if (event.target.matches('area[data-area]')) {
+        const area = event.target.dataset.area;
+        showStartSelection(area);
+      } else if (event.target.matches('.start-point-btn')) {
+        const startPoint = event.target.dataset.start;
+        playVideo(startPoint);
+      } else if (event.target.matches('[data-lang]')) {
+        const lang = event.target.dataset.lang;
+        translatePage(lang);
+      }
+    });
+
+    function translatePage(lang) {
+      document.querySelectorAll("[data-translate]").forEach((element) => {
+        const key = element.dataset.translate;
+        if (translations[lang] && translations[lang][key]) {
+          if (key === "visitor") {
+            const visitorCount = document.getElementById("visitor-count").innerText;
+            element.innerHTML = `${translations[lang][key]} <span id="visitor-count">${visitorCount}</span>`;
+          } else {
+            element.innerText = translations[lang][key];
+          }
+        }
+      });
+    }
+
+    function showMap(floor) {
+      state.currentFloor = floor;
+      state.selectedArea = null;
+      const mapContainer = document.getElementById('map-container');
+      const map = document.getElementById('map');
+      const mapAreas = document.getElementById('map-areas');
+      map.src = floorData[floor].map;
+      map.alt = `${floor} 도면`;
+      mapAreas.innerHTML = '';
+      floorData[floor].areas.forEach(({ coords, area }) => {
+        const areaTag = document.createElement('area');
+        areaTag.setAttribute('shape', 'rect');
+        areaTag.setAttribute('coords', coords);
+        areaTag.setAttribute('href', 'javascript:void(0);');
+        areaTag.setAttribute('data-area', area);
+        mapAreas.appendChild(areaTag);
+      });
+      mapContainer.style.display = 'block';
+    }
+
+    function closeMap() {
+      document.getElementById('map-container').style.display = 'none';
+      state.currentFloor = null;
+    }
+
+    function showStartSelection(area) {
+      state.selectedArea = area;
+      document.getElementById('start-selection').style.display = 'block';
+    }
+
+    function closeStartSelection() {
+      document.getElementById('start-selection').style.display = 'none';
+      state.selectedArea = null;
+    }
+
+    function playVideo(startPoint) {
+      if (!state.selectedArea || !state.currentFloor) {
+        alert('먼저 구역과 시작점을 선택하세요.');
+        return;
+      }
+      const videoFile = floorData[state.currentFloor]?.videos[`${state.selectedArea}_${startPoint}`];
+      if (!videoFile) {
+        alert('해당 동영상이 없습니다.');
+        return;
+      }
+      const videoSource = document.getElementById('video-source');
+      videoSource.src = videoFile;
+      const videoPlayer = document.getElementById('video-player');
+      videoPlayer.load();
+      document.getElementById('video-container').style.display = 'block';
+      closeStartSelection();
+    }
+
+    function closeVideo() {
+      const videoContainer = document.getElementById('video-container');
+      const videoPlayer = document.getElementById('video-player');
+      videoPlayer.pause();
+      videoContainer.style.display = 'none';
+    }
+
+    let visitorCount = localStorage.getItem('visitorCount') || 0;
+    visitorCount++;
+    localStorage.setItem('visitorCount', visitorCount);
+    document.getElementById('visitor-count').innerText = visitorCount;
+  </script>
+</body>
+</html>
